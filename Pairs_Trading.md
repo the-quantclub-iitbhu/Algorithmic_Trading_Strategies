@@ -124,6 +124,264 @@ plt.show()
 ```
 ![image](https://github.com/the-quantclub-iitbhu/Algorithmic_Trading_Strategies/assets/159526866/b01f3a2c-9f28-4478-bd37-71e69f22b6e9)
 
+```python
+# Plot correlation matrix with only pairs that we will use for our trading strategy
+plt.figure(figsize=(12, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap=sns.diverging_palette(220, 20, as_cmap=True),
+            fmt=".2f", linewidths=0.5, mask=~((correlation_matrix > 0.95) & (correlation_matrix != 1)))
+
+plt.title('Stocks Correlation Matrix')
+plt.show()
+```
+![image](https://github.com/the-quantclub-iitbhu/Algorithmic_Trading_Strategies/assets/159526866/404c225b-9bbd-41e1-a0c3-2d0520245f1d)
+
+```python
+# Initialize an empty dictionary to store pairs
+high_correlation_pairs = {}
+
+# Iterate through the correlation matrix to find pairs with correlation > 0.9 (or < -0.9) and not the same coin
+for i in range(len(correlation_matrix.columns)):
+    for j in range(i+1, len(correlation_matrix.columns)):
+        if (correlation_matrix.iloc[i, j] > 0.95) and \
+                correlation_matrix.columns[i] != correlation_matrix.columns[j]:
+            pair = (correlation_matrix.columns[i], correlation_matrix.columns[j])
+            high_correlation_pairs[pair] = correlation_matrix.iloc[i, j]
+
+# Display the dictionary of pairs
+print(high_correlation_pairs)
+```
+```python
+# Function to calculate spread
+def calculate_spread(a, b, hedge_ratio):
+    spread = np.log(a) - hedge_ratio * np.log(b)
+    return spread
+
+# Dictionary to store hedge ratios for each pair
+hedge_ratios = {}
+
+# Calculate hedge ratios using regression for each pair
+for pair in high_correlation_pairs:
+    # Preprocess data to handle missing or infinite values
+    df = stock_data[[pair[0], pair[1]]].dropna()
+    x = np.log(df[pair[0]])
+    y = np.log(df[pair[1]])
+
+    # Perform OLS regression
+    X = sm.add_constant(x)
+    model = sm.OLS(y, X).fit()
+
+    # Store hedge ratio if regression is successful
+    if not model.params.empty:
+        hedge_ratios[pair] = model.params[1]
+    else:
+        print(f"Regression failed for pair: {pair}")
+
+# Print hedge ratios for each pair
+print("Hedge Ratios:")
+for pair, ratio in hedge_ratios.items():
+    print(f"{pair}: {ratio}")
+```
+```python
+# Calculate and print spreads for each pair using the calculated hedge ratio
+print("\nSpreads:")
+for pair, ratio in hedge_ratios.items():
+    spread = calculate_spread(stock_data[pair[0]], stock_data[pair[1]], ratio)
+    print(f"{pair}: Spread mean: {spread.mean()}, Spread std dev: {spread.std()}")
+```
+
+```python
+# Dictionary to store acceptable pairs
+acceptable_pairs = {}
+
+# Run Dickey Fuller test on the spread values
+for pair, ratio in hedge_ratios.items():
+    # Preprocess data to handle missing or infinite values
+    df = pd.concat([stock_data[pair[0]], stock_data[pair[1]]], axis=1).dropna()
+    spread = calculate_spread(df[pair[0]], df[pair[1]], ratio)
+    result = adfuller(spread)
+
+    # Check if p-value is less than 0.05
+    if result[1] < 0.05:
+        acceptable_pairs[pair] = hedge_ratios[pair]
+
+    print(f"\nDickey-Fuller Test Results for {pair}:")
+    print('ADF Statistic:', result[0])
+    print('p-value:', result[1])
+    print('Critical Values:')
+    for key, value in result[4].items():
+        print(f'   {key}: {value}')
+```
+
+```python
+# Function to calculate z-score
+def calculate_zscore(spread, window):
+    rolling_mean = spread.rolling(window=window).mean()
+    rolling_std = spread.rolling(window=window).std()
+    zscore = (spread - rolling_mean) / rolling_std
+    return zscore
+```
+
+```python
+# Entry and exit points
+window = 20  # Window size for rolling mean and std deviation
+threshold_upper = 2  # Upper threshold for z-score entry
+threshold_lower = -2  # Lower threshold for z-score entry
+
+# Entry and exit points for each pair
+entry_long_points_dict = {}
+entry_short_points_dict = {}
+exit_points_dict = {}
+
+for pair, ratio in acceptable_pairs.items():
+    spread = calculate_spread(stock_data[pair[0]], stock_data[pair[1]], ratio)
+    zscore = calculate_zscore(spread, window)
+    open_trade = False
+
+    # Initialize lists to store entry and exit points for this pair
+    entry_long_points = []
+    entry_short_points = []
+    exit_points = []
+
+    # Find entry and exit points
+    for i in range(len(zscore)):
+        if not open_trade:
+            if zscore[i] <= threshold_lower:  # Entry Long
+                entry_long_points.append((stock_data['index'][i], zscore[i]))
+                open_trade = True
+            elif zscore[i] >= threshold_upper:  # Entry Short
+                entry_short_points.append((stock_data['index'][i], zscore[i]))
+                open_trade = True
+        elif open_trade:
+            if (zscore[i] > 0 and zscore[i-1] <= 0) or (zscore[i] < 0 and zscore[i-1] >= 0):  # Exit Long or Short
+                exit_points.append((stock_data['index'][i], zscore[i]))
+                open_trade = False
+
+    # Store entry and exit points for this pair in the dictionaries
+    entry_long_points_dict[pair] = entry_long_points
+    entry_short_points_dict[pair] = entry_short_points
+    exit_points_dict[pair] = exit_points
+```
+
+```python
+# Plot spread and z-score for each pair with entry and exit points
+for pair, ratio in acceptable_pairs.items():
+    spread = calculate_spread(stock_data[pair[0]], stock_data[pair[1]], ratio)
+    zscore = calculate_zscore(spread, window)
+
+    # Plot spread and z-score
+    plt.figure(figsize=(12, 6))
+    plt.plot(stock_data['index'], spread, label='Spread')
+    plt.axhline(threshold_upper, color='r', linestyle='--', label='Upper Threshold')
+    plt.axhline(threshold_lower, color='g', linestyle='--', label='Lower Threshold')
+    plt.plot(stock_data['index'], zscore, label='Z-Score', color='orange')
+
+    # Plot entry and exit points
+    entry_long_points = entry_long_points_dict.get(pair, [])
+    entry_short_points = entry_short_points_dict.get(pair, [])
+    exit_points = exit_points_dict.get(pair, [])
+
+    for point in entry_long_points:
+        plt.scatter(point[0], point[1], color='green', marker='^')
+    for point in entry_short_points:
+        plt.scatter(point[0], point[1], color='red', marker='v')
+    for point in exit_points:
+        plt.scatter(point[0], point[1], color='blue', marker='o')
+
+    # Add legend
+    legend_entries = {'Entry Long': 'green', 'Entry Short': 'red', 'Exit Trade': 'blue'}
+    plt.legend(labels=legend_entries.keys(), handles=[plt.Line2D([0], [0], marker='^', color='w', markerfacecolor=color, markersize=10) for color in legend_entries.values()], loc='best')
+
+    plt.title(f"Spread and Z-Score for {pair[0]} and {pair[1]}")
+    plt.xlabel('Date')
+    plt.ylabel('Value')
+    plt.show()
+```
+![image](https://github.com/the-quantclub-iitbhu/Algorithmic_Trading_Strategies/assets/159526866/d28a30b6-331b-46f1-89b3-3d9f664a4e8b)
+
+```python
+# Calculate MACD
+short_ema = zscore.ewm(span=12, adjust=False).mean()
+long_ema = zscore.ewm(span=26, adjust=False).mean()
+macd_line = short_ema - long_ema
+signal_line = macd_line.ewm(span=9, adjust=False).mean()
+macd_histogram = macd_line - signal_line
+
+# Plot MACD
+plt.figure(figsize=(12, 6))
+plt.plot(stock_data['index'], macd_line, label='MACD Line', color='blue')
+plt.plot(stock_data['index'], signal_line, label='Signal Line', color='red')
+plt.bar(stock_data['index'], macd_histogram, label='MACD Histogram', color='green')
+plt.title('MACD Indicator for Z-Score Spread')
+plt.xlabel('Date')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+```
+![image](https://github.com/the-quantclub-iitbhu/Algorithmic_Trading_Strategies/assets/159526866/cbd81f4e-0993-4071-8f4c-487280b2ae1d)
+
+```python
+# Trading signals based on MACD
+entry_long = (macd_line > signal_line)
+entry_short = (macd_line < signal_line)
+
+total_capital = 2000000
+
+# Distribute capital equally for both pairs
+capital_per_pair = total_capital / 2
+
+# Initialize variables to track positions and PnL
+positions = {pair[0]: {'position': 0, 'unrealized_pnl': 0}, pair[1]: {'position': 0, 'unrealized_pnl': 0}}  # Track positions and unrealized PnL for each stock
+prev_entry_long = False  # Track previous long entry signal
+prev_entry_short = False  # Track previous short entry signal
+stop_loss = 0.015  # Stop loss threshold
+pnl = 0  # Total PnL
+pnl_values = []  # List to store PnL values over time
+
+# Iterate over each day to generate signals and calculate PnL
+for i in range(len(stock_data)):
+    # Check for long entry signal
+    if entry_long.iloc[i] and not prev_entry_long:
+        # Place buy order for pair[0] and sell order for pair[1] with determined position size
+        positions[pair[0]]['position'] -= capital_per_pair / stock_data[pair[0]].iloc[i]
+        positions[pair[1]]['position'] += capital_per_pair / stock_data[pair[1]].iloc[i]
+    # Check for short entry signal
+    elif entry_short.iloc[i] and not prev_entry_short:
+        # Place sell order for pair[0] and buy order for pair[1] with determined position size
+        positions[pair[0]]['position'] += capital_per_pair / stock_data[pair[0]].iloc[i]
+        positions[pair[1]]['position'] -= capital_per_pair / stock_data[pair[1]].iloc[i]
+
+    # Update previous entry signals
+    prev_entry_long = entry_long.iloc[i]
+    prev_entry_short = entry_short.iloc[i]
+
+    # Calculate PnL for each stock based on price change and update unrealized PnL
+    for stock in positions:
+        positions[stock]['unrealized_pnl'] = positions[stock]['position'] * (stock_data[stock].iloc[i] - stock_data[stock].iloc[i - 1])
+
+        # Check if stop loss is triggered
+        if positions[stock]['unrealized_pnl'] / stock_data[stock].iloc[i] >= stop_loss:
+            # Exit position
+            pnl += positions[stock]['unrealized_pnl']
+            positions[stock]['position'] = 0
+            positions[stock]['unrealized_pnl'] = 0
+
+    # Calculate total PnL
+    total_pnl = sum(positions[stock]['unrealized_pnl'] for stock in positions)
+    pnl_values.append(pnl + total_pnl)
+
+# Plot PnL
+plt.figure(figsize=(12, 6))
+plt.plot(stock_data['index'], pnl_values, label='PnL', color='blue')
+plt.title('PnL Over Time with Stop Loss')
+plt.xlabel('Date')
+plt.ylabel('PnL')
+plt.legend()
+plt.show()
+```
+![image](https://github.com/the-quantclub-iitbhu/Algorithmic_Trading_Strategies/assets/159526866/3192f350-22d6-46e6-bf17-5c5678286a45)
+
+    
+
 
 
 ## References
