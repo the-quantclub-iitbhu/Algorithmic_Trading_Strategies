@@ -44,6 +44,23 @@ The objective of this pairs trading strategy is to identify highly correlated pa
 - Model Risk: The strategy's performance heavily depends on the accuracy of statistical models used for spread calculation and signal generation, introducing model risk.
 - Transaction Costs: Frequent trading in multiple stocks incurs transaction costs, which can erode profits, especially for smaller portfolios.
 
+## Strategy Implementation
+
+The strategy can be implemented using your preferred trading platform or programming language (e.g., Python, R). Below is a simplified example using historical price data:
+```python
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+import statsmodels.api as sm
+from statsmodels.tsa.stattools import adfuller
+import warnings
+
+warnings.filterwarnings("ignore")
+```
+
 ## References
 
 - [Pairs Trading Basics](https://blog.quantinsti.com/pairs-trading-basics/)
