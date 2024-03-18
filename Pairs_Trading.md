@@ -65,7 +65,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 ```
-The dictionary stocks is created to store information about various stocks traded on the Indian stock market:
+The dictionary 'stocks' is created to store information about various stocks traded on the Indian stock market:
 ```python
 stocks = {
     'TCS.NS': 'TCS (Tata Consultancy Services)',
@@ -122,6 +122,8 @@ sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidt
 plt.title('Stocks Correlation Matrix')
 plt.show()
 ```
+![image](https://github.com/the-quantclub-iitbhu/Algorithmic_Trading_Strategies/assets/159526866/b01f3a2c-9f28-4478-bd37-71e69f22b6e9)
+
 
 
 ## References
