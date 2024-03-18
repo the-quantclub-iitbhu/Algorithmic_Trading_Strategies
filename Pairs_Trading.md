@@ -65,6 +65,64 @@ import warnings
 
 warnings.filterwarnings("ignore")
 ```
+The dictionary stocks is created to store information about various stocks traded on the Indian stock market:
+```python
+stocks = {
+    'TCS.NS': 'TCS (Tata Consultancy Services)',
+    'INFY.NS': 'Infosys',
+    'WIPRO.NS': 'Wipro',
+    'HCLTECH.NS': 'HCL Technologies',
+    'SUNPHARMA.NS': 'Sun Pharmaceutical Industries',
+    'DRREDDY.NS': 'Dr. Reddy\'s Laboratories',
+    'CIPLA.NS': 'Cipla',
+    'LUPIN.NS': 'Lupin',
+    'HDFCBANK.NS': 'HDFC Bank',
+    'ICICIBANK.NS': 'ICICI Bank',
+    'SBIN.NS': 'State Bank of India',
+    'KOTAKBANK.NS': 'Kotak Mahindra Bank',
+    'TATAMOTORS.NS': 'Tata Motors',
+    'MARUTI.NS': 'Maruti Suzuki India',
+    'RELIANCE.NS': 'Reliance Industries',
+    'IOC.NS': 'Indian Oil Corporation',
+    'LT.BO': 'Larsen & Toubro Ltd',
+    'GMRINFRA.NS': 'GMR Airports Infrastructure',
+    'BDL.NS': 'Bharat Dynamics Limited',
+}
+```
+
+Defining a time period for retrieving historical data:
+```python
+start_date = (datetime.today() - timedelta(days=365*4)).strftime('%Y-%m-%d')
+end_date = datetime.today().strftime('%Y-%m-%d')
+```
+
+Fetching historical stock price data for each stock symbol listed in the stocks dictionary and aggregating it for further steps:
+```python
+# Create an empty DataFrame to store the data
+stock_data = pd.DataFrame()
+
+# Download data for each ticker and append it to the DataFrame
+for ticker, company in stocks.items():
+    data = yf.download(ticker, start=start_date, end=end_date)
+    close_prices = data['Close']
+    close_prices.rename(company, inplace=True)
+    stock_data = pd.concat([stock_data, close_prices], axis=1)
+
+# Reset index
+stock_data.reset_index(inplace=True)
+```
+Correlation Matrix
+```python
+# Calculate correlation matrix
+correlation_matrix = stock_data.corr()
+
+# Plot correlation matrix as a heatmap
+plt.figure(figsize=(12, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5)
+plt.title('Stocks Correlation Matrix')
+plt.show()
+```
+
 
 ## References
 
