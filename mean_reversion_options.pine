@@ -1,0 +1,45 @@
+//@version=5
+strategy("Mean Reversion Options Strategy", overlay=true)
+
+// Input Parameters
+length = input(20, title="Bollinger Bands Length")
+src = close
+mult = input(2.0, title="Bollinger Bands Multiplier")
+rsi_length = input(14, title="RSI Length")
+overbought = input(70, title="Overbought Level")
+oversold = input(30, title="Oversold Level")
+
+// Bollinger Bands Calculation
+basis = ta.sma(src, length)
+dev = mult * ta.stdev(src, length)
+upper_band = basis + dev
+lower_band = basis - dev
+
+// RSI Calculation
+rsi = ta.rsi(src, rsi_length)
+
+// Define Entry Conditions
+long_condition = ta.crossover(rsi, oversold) and close < lower_band
+short_condition = ta.crossunder(rsi, overbought) and close > upper_band
+
+// Define Exit Conditions
+exit_long = ta.crossunder(rsi, 50)
+exit_short = ta.crossover(rsi, 50)
+
+// Plot Bollinger Bands
+plot(upper_band, title="Upper Band", color=color.blue)
+plot(lower_band, title="Lower Band", color=color.blue)
+plot(basis, title="Basis", color=color.gray)
+
+// Entry and Exit Signals
+if (long_condition)
+    strategy.entry("Long", strategy.long)
+
+if (short_condition)
+    strategy.entry("Short", strategy.short)
+
+if (exit_long)
+    strategy.close("Long")
+
+if (exit_short)
+    strategy.close("Short")
